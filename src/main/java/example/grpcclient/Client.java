@@ -1,263 +1,277 @@
 package example.grpcclient;
 
 import com.google.protobuf.Empty;
-import io.grpc.Channel;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.StatusRuntimeException;
 import service.*;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
-
-/**
- * Client that requests `parrot` method from the `EchoServer`.
- */
 public class Client {
-    private final EchoGrpc.EchoBlockingStub blockingStub;
-    private final JokeGrpc.JokeBlockingStub blockingStub2;
-    private final RegistryGrpc.RegistryBlockingStub blockingStub3;
-    private final RegistryGrpc.RegistryBlockingStub blockingStub4;
+    private final EchoGrpc.EchoBlockingStub echoStub;
+    private final JokeGrpc.JokeBlockingStub jokeStub;
+    private final RegistryGrpc.RegistryBlockingStub registryStub;
+    private final CoffeePotGrpc.CoffeePotBlockingStub coffeeStub;
+    private final SortGrpc.SortBlockingStub sortStub;
 
-    /**
-     * Construct client for accessing server using the existing channel.
-     */
-    public Client(Channel channel, Channel regChannel) {
-        // 'channel' here is a Channel, not a ManagedChannel, so it is not this code's
-        // responsibility to
-        // shut it down.
-
-        // Passing Channels to code makes code easier to test and makes it easier to
-        // reuse Channels.
-        blockingStub = EchoGrpc.newBlockingStub(channel);
-        blockingStub2 = JokeGrpc.newBlockingStub(channel);
-        blockingStub3 = RegistryGrpc.newBlockingStub(regChannel);
-        blockingStub4 = RegistryGrpc.newBlockingStub(channel);
+    public Client(ManagedChannel serviceChannel, ManagedChannel registryChannel) {
+        this.echoStub = EchoGrpc.newBlockingStub(serviceChannel);
+        this.jokeStub = JokeGrpc.newBlockingStub(serviceChannel);
+        this.registryStub = RegistryGrpc.newBlockingStub(registryChannel);
+        this.coffeeStub = CoffeePotGrpc.newBlockingStub(serviceChannel);
+        this.sortStub = SortGrpc.newBlockingStub(serviceChannel);
     }
 
-    /**
-     * Construct client for accessing server using the existing channel.
-     */
-    public Client(Channel channel) {
-        // 'channel' here is a Channel, not a ManagedChannel, so it is not this code's
-        // responsibility to
-        // shut it down.
-
-        // Passing Channels to code makes code easier to test and makes it easier to
-        // reuse Channels.
-        blockingStub = EchoGrpc.newBlockingStub(channel);
-        blockingStub2 = JokeGrpc.newBlockingStub(channel);
-        blockingStub3 = null;
-        blockingStub4 = null;
-    }
-
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         if (args.length != 6) {
-            System.out
-                    .println("Expected arguments: <host(String)> <port(int)> <regHost(string)> <regPort(int)> <message(String)> <regOn(bool)>");
-            System.exit(1);
+            System.err.println("Usage: <host> <port> <regHost> <regPort> <message> <regOn>");
+            return;
         }
-        int port = 9099;
-        int regPort = 9003;
+
         String host = args[0];
-        String regHost = args[2];
-        String message = args[4];
+        int port;
+        String initialMessage = args[4];
+        boolean regOn;
+        int regPort;
         try {
             port = Integer.parseInt(args[1]);
             regPort = Integer.parseInt(args[3]);
-        } catch (NumberFormatException nfe) {
-            System.out.println("[Port] must be an integer");
-            System.exit(2);
+            regOn = Boolean.parseBoolean(args[5]);
+        } catch (NumberFormatException e) {
+            System.err.println("Error parsing numeric argument: " + e.getMessage());
+            return;
         }
 
-        // Create a communication channel to the server (Node), known as a Channel. Channels
-        // are thread-safe
-        // and reusable. It is common to create channels at the beginning of your
-        // application and reuse
-        // them until the application shuts down.
-        String target = host + ":" + port;
-        ManagedChannel channel = ManagedChannelBuilder.forTarget(target)
-                // Channels are secure by default (via SSL/TLS). For the example we disable TLS
-                // to avoid
-                // needing certificates.
+        ManagedChannel serviceChannel = ManagedChannelBuilder.forAddress(host, port)
+                .usePlaintext().build();
+        ManagedChannel registryChannel = ManagedChannelBuilder.forAddress(args[2], regPort)
                 .usePlaintext().build();
 
-        String regTarget = regHost + ":" + regPort;
-        ManagedChannel regChannel = ManagedChannelBuilder.forTarget(regTarget).usePlaintext().build();
         try {
-
-            // ##############################################################################
-            // ## Assume we know the port here from the service node it is basically set through Gradle
-            // here.
-            // In your version you should first contact the registry to check which services
-            // are available and what the port
-            // etc is.
-
-            /**
-             * Your client should start off with
-             * 1. contacting the Registry to check for the available services
-             * 2. List the services in the terminal and the client can
-             *    choose one (preferably through numbering)
-             * 3. Based on what the client chooses
-             *    the terminal should ask for input, eg. a new sentence, a sorting array or
-             *    whatever the request needs
-             * 4. The request should be sent to one of the
-             *    available services (client should call the registry again and ask for a
-             *    Server providing the chosen service) should send the request to this service and
-             *    return the response in a good way to the client
-             *
-             * You should make sure your client does not crash in case the service node
-             * crashes or went offline.
-             */
-
-            // Just doing some hard coded calls to the service node without using the
-            // registry
-            // create client
-            Client client = new Client(channel, regChannel);
-
-            // call the parrot service on the server
-            client.askServerToParrot(message);
-
-            // ask the user for input how many jokes the user wants
+            Client client = new Client(serviceChannel, registryChannel);
             BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
 
-            // Reading data using readLine
-            System.out.println("How many jokes would you like?"); // NO ERROR handling of wrong input here.
-            String num = reader.readLine();
-
-            // calling the joked service from the server with num from user input
-            client.askForJokes(Integer.valueOf(num));
-
-            // adding a joke to the server
-            client.setJoke("I made a pencil with two erasers. It was pointless.");
-
-            // showing 6 joked
-            client.askForJokes(Integer.valueOf(6));
-
-            // list all the services that are implemented on the node that this client is connected to
-
-            System.out.println("Services on the connected node. (without registry)");
-            client.getNodeServices(); // get all registered services
-
-            // ############### Contacting the registry just so you see how it can be done
-
-            if (args[5].equals("true")) {
-                // Comment these last Service calls while in Activity 1 Task 1, they are not needed and wil throw issues without the Registry running
-                // get thread's services
-                client.getServices(); // get all registered services
-
-                // get parrot
-                client.findServer("services.Echo/parrot"); // get ONE server that provides the parrot service
-
-                // get all setJoke
-                client.findServers("services.Joke/setJoke"); // get ALL servers that provide the setJoke service
-
-                // get getJoke
-                client.findServer("services.Joke/getJoke"); // get ALL servers that provide the getJoke service
-
-                // does not exist
-                client.findServer("random"); // shows the output if the server does not find a given service
+            if (regOn) {
+                client.dynamicFlow(reader, initialMessage);
+            } else {
+                client.staticMenu(reader, initialMessage);
             }
-
+        } catch (IOException e) {
+            System.err.println("I/O error: " + e.getMessage());
         } finally {
-            // ManagedChannels use resources like threads and TCP connections. To prevent
-            // leaking these
-            // resources the channel should be shut down when it will no longer be used. If
-            // it may be used
-            // again leave it running.
+            shutdownChannel(serviceChannel);
+            shutdownChannel(registryChannel);
+        }
+    }
+
+    private static void shutdownChannel(ManagedChannel channel) {
+        try {
             channel.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
-            if (args[5].equals("true")) {
-                regChannel.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void dynamicFlow(BufferedReader reader, String initialMessage) throws IOException {
+        try {
+            ServicesListRes servicesRes = registryStub.getServices(GetServicesReq.newBuilder().build());
+            List<String> services = servicesRes.getServicesList();
+            if (services.isEmpty()) {
+                System.out.println("No services registered.");
+                return;
             }
+            System.out.println("Available services:");
+            for (int i = 0; i < services.size(); i++) {
+                System.out.printf("%d) %s%n", i + 1, services.get(i));
+            }
+            System.out.print("Select a service by number: ");
+            int sel = parseInt(reader.readLine(), -1) - 1;
+            if (sel < 0 || sel >= services.size()) {
+                System.out.println("Invalid selection.");
+                return;
+            }
+            String fullService = services.get(sel);
+
+            SingleServerRes srvRes = registryStub.findServer(
+                    FindServerReq.newBuilder().setServiceName(fullService).build());
+            Connection conn = srvRes.getConnection();
+
+            ManagedChannel dynChannel = ManagedChannelBuilder.forAddress(conn.getUri(), conn.getPort())
+                    .usePlaintext().build();
+            try {
+                invokeByMethod(fullService, initialMessage, reader, dynChannel);
+            } finally {
+                shutdownChannel(dynChannel);
+            }
+        } catch (StatusRuntimeException e) {
+            System.err.println("Registry RPC failed: " + e.getStatus());
         }
     }
 
-    public void askServerToParrot(String message) {
+    private void staticMenu(BufferedReader reader, String initialMessage) throws IOException {
+        System.out.println("Select service to call:");
+        System.out.println("1) Echo");
+        System.out.println("2) Joke");
+        System.out.println("3) Brew Coffee");
+        System.out.println("4) Get Cup");
+        System.out.println("5) Brew Status");
+        System.out.println("6) Sort");
+        System.out.print("Enter choice: ");
+        int choice = parseInt(reader.readLine(), -1);
 
-        ClientRequest request = ClientRequest.newBuilder().setMessage(message).build();
-        ServerResponse response;
-        try {
-            response = blockingStub.parrot(request);
-        } catch (Exception e) {
-            System.err.println("RPC failed: " + e.getMessage());
-            return;
-        }
-        System.out.println("Received from server: " + response.getMessage());
-    }
-
-    public void askForJokes(int num) {
-        JokeReq request = JokeReq.newBuilder().setNumber(num).build();
-        JokeRes response;
-
-        // just to show how to use the empty in the protobuf protocol
-        Empty empt = Empty.newBuilder().build();
-
-        try {
-            response = blockingStub2.getJoke(request);
-        } catch (Exception e) {
-            System.err.println("RPC failed: " + e);
-            return;
-        }
-        System.out.println("Your jokes: ");
-        for (String joke : response.getJokeList()) {
-            System.out.println("--- " + joke);
-        }
-    }
-
-    public void setJoke(String joke) {
-        JokeSetReq request = JokeSetReq.newBuilder().setJoke(joke).build();
-        JokeSetRes response;
-
-        try {
-            response = blockingStub2.setJoke(request);
-            System.out.println(response.getOk());
-        } catch (Exception e) {
-            System.err.println("RPC failed: " + e);
+        switch (choice) {
+            case 1:
+                callEcho(initialMessage, null);
+                break;
+            case 2:
+                callJoke(reader, null);
+                break;
+            case 3:
+                callBrew(null);
+                break;
+            case 4:
+                callGetCup(null);
+                break;
+            case 5:
+                callBrewStatus(null);
+                break;
+            case 6:
+                callSort(reader, null);
+                break;
+            default:
+                System.out.println("Invalid choice.");
         }
     }
 
-    public void getNodeServices() {
-        GetServicesReq request = GetServicesReq.newBuilder().build();
-        ServicesListRes response;
-        try {
-            response = blockingStub4.getServices(request);
-            System.out.println(response.toString());
-        } catch (Exception e) {
-            System.err.println("RPC failed: " + e);
+    private void invokeByMethod(String fullService, String msg, BufferedReader reader, ManagedChannel ch) throws IOException {
+        String method = fullService.substring(fullService.lastIndexOf('/') + 1);
+        switch (method) {
+            case "parrot":
+                callEcho(msg, ch);
+                break;
+            case "getJoke":
+                callJoke(reader, ch);
+                break;
+            case "brew":
+                callBrew(ch);
+                break;
+            case "getCup":
+                callGetCup(ch);
+                break;
+            case "brewStatus":
+                callBrewStatus(ch);
+                break;
+            case "sort":
+                callSort(reader, ch);
+                break;
+            default:
+                System.out.println("Unknown method: " + method);
         }
     }
 
-    public void getServices() {
-        GetServicesReq request = GetServicesReq.newBuilder().build();
-        ServicesListRes response;
+    private int parseInt(String s, int defaultVal) {
         try {
-            response = blockingStub3.getServices(request);
-            System.out.println(response.toString());
-        } catch (Exception e) {
-            System.err.println("RPC failed: " + e);
+            return Integer.parseInt(s.trim());
+        } catch (NumberFormatException e) {
+            return defaultVal;
         }
     }
 
-    public void findServer(String name) {
-        FindServerReq request = FindServerReq.newBuilder().setServiceName(name).build();
-        SingleServerRes response;
+    private void callEcho(String msg, ManagedChannel ch) {
         try {
-            response = blockingStub3.findServer(request);
-            System.out.println(response.toString());
-        } catch (Exception e) {
-            System.err.println("RPC failed: " + e);
+            EchoGrpc.EchoBlockingStub stub = (ch != null)
+                    ? EchoGrpc.newBlockingStub(ch)
+                    : echoStub;
+            ServerResponse resp = stub.parrot(ClientRequest.newBuilder().setMessage(msg).build());
+            System.out.println("Echo: " + (resp.getIsSuccess() ? resp.getMessage() : resp.getError()));
+        } catch (StatusRuntimeException e) {
+            System.err.println("Echo RPC failed: " + e.getStatus());
         }
     }
 
-    public void findServers(String name) {
-        FindServersReq request = FindServersReq.newBuilder().setServiceName(name).build();
-        ServerListRes response;
+    private void callJoke(BufferedReader reader, ManagedChannel ch) throws IOException {
+        System.out.print("How many jokes? ");
+        int n = parseInt(reader.readLine(), 0);
         try {
-            response = blockingStub3.findServers(request);
-            System.out.println(response.toString());
-        } catch (Exception e) {
-            System.err.println("RPC failed: " + e);
+            JokeGrpc.JokeBlockingStub stub = (ch != null)
+                    ? JokeGrpc.newBlockingStub(ch)
+                    : jokeStub;
+            JokeRes resp = stub.getJoke(JokeReq.newBuilder().setNumber(n).build());
+            resp.getJokeList().forEach(j -> System.out.println("- " + j));
+        } catch (StatusRuntimeException e) {
+            System.err.println("Joke RPC failed: " + e.getStatus());
+        }
+    }
+
+    private void callBrew(ManagedChannel ch) {
+        try {
+            CoffeePotGrpc.CoffeePotBlockingStub stub = (ch != null)
+                    ? CoffeePotGrpc.newBlockingStub(ch)
+                    : coffeeStub;
+            BrewResponse resp = stub.brew(Empty.getDefaultInstance());
+            if (resp.getIsSuccess()) System.out.println(resp.getMessage());
+            else System.out.println("Error: " + resp.getError());
+        } catch (StatusRuntimeException e) {
+            System.err.println("Brew RPC failed: " + e.getStatus());
+        }
+    }
+
+    private void callGetCup(ManagedChannel ch) {
+        try {
+            CoffeePotGrpc.CoffeePotBlockingStub stub = (ch != null)
+                    ? CoffeePotGrpc.newBlockingStub(ch)
+                    : coffeeStub;
+            GetCupResponse resp = stub.getCup(Empty.getDefaultInstance());
+            if (resp.getIsSuccess()) System.out.println(resp.getMessage());
+            else System.out.println("Error: " + resp.getError());
+        } catch (StatusRuntimeException e) {
+            System.err.println("GetCup RPC failed: " + e.getStatus());
+        }
+    }
+
+    private void callBrewStatus(ManagedChannel ch) {
+        try {
+            CoffeePotGrpc.CoffeePotBlockingStub stub = (ch != null)
+                    ? CoffeePotGrpc.newBlockingStub(ch)
+                    : coffeeStub;
+            BrewStatusResponse resp = stub.brewStatus(Empty.getDefaultInstance());
+            BrewStatus status = resp.getStatus();
+            System.out.printf("Status: %s (%dm %ds)%n",
+                    status.getMessage(), status.getMinutes(), status.getSeconds());
+        } catch (StatusRuntimeException e) {
+            System.err.println("Status RPC failed: " + e.getStatus());
+        }
+    }
+
+    private void callSort(BufferedReader reader, ManagedChannel ch) throws IOException {
+        System.out.print("Enter numbers (comma-separated): ");
+        List<Integer> data = Arrays.stream(reader.readLine().split(","))
+                .map(str -> parseInt(str, Integer.MIN_VALUE))
+                .filter(val -> val != Integer.MIN_VALUE)
+                .collect(Collectors.toList());
+        System.out.print("Choose algo (0=MERGE,1=QUICK,2=INTERN): ");
+        int idx = parseInt(reader.readLine(), 2);
+        Algo algo = Algo.forNumber(idx);
+        try {
+            SortGrpc.SortBlockingStub stub = (ch != null)
+                    ? SortGrpc.newBlockingStub(ch)
+                    : sortStub;
+            SortResponse resp = stub.sort(
+                    SortRequest.newBuilder().setAlgo(algo).addAllData(data).build()
+            );
+            if (resp.getIsSuccess()) System.out.println("Sorted: " + resp.getDataList());
+            else System.out.println("Error: " + resp.getError());
+        } catch (StatusRuntimeException e) {
+            System.err.println("Sort RPC failed: " + e.getStatus());
         }
     }
 }
+
+
