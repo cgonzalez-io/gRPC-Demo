@@ -1,0 +1,45 @@
+//This service is a coffee pot. One can request the pot to brew and request a cup of coffee. A pot will hold a limited number of cups of coffee (You can choose how many) and will start with no coffee in the pot. 
+//When a cup is requested and it is successful the pot should reduce by 1 cup. If there is no coffee it should fail the request with an error.
+//Brewing a cup of coffee should take a minimum of 30 seconds.
+//User can get the status of the brew which should return how much time is left for the pot to brew and a message.
+
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "service";
+option java_outer_classname = "CoffePotProto";
+
+package services;
+import "google/protobuf/empty.proto";
+
+service CoffeePot {
+  rpc brew (google.protobuf.Empty) returns (BrewResponse) {}
+  rpc getCup (google.protobuf.Empty) returns (GetCupResponse) {}
+  rpc brewStatus (google.protobuf.Empty) returns (BrewStatusResponse) {}
+}
+
+// RESPONSE: brew response
+message BrewResponse {
+  bool isSuccess = 1; //True if the coffee was brewed, else it is false. Should not be brewed if coffee still contains >= 1 cup.
+  string message = 2; //Response message to user in success case.
+  string error = 3;   //Error message if isSuccess is false.
+}
+
+// RESPONSE: Get cup response
+message GetCupResponse {
+  bool isSuccess = 1; //True if a cup was retrieved, false if the pot was empty.
+  string message = 2; //Message back to user in success case.
+  string error = 3;   //Error message if isSuccess is false. If pot is brewing should return time left.
+}  
+
+// RESPONSE: Brew status response
+message BrewStatusResponse {
+  BrewStatus status = 1; //Brew status of pot
+}
+
+//BrewStatus message
+message BrewStatus {
+  int32 minutes = 1;  //Minutes remaining on brew
+  int32 seconds = 2;  //Seconds remaining on 
+  string message = 3; //Message back to user such as pot is brewed, pot is brewing, x cups remaining... etc
+}

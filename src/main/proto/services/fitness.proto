@@ -1,0 +1,53 @@
+// A basic fitness pal service where clients can add an exercise to the server or request 
+// a random exercise by type. Data should remain persistent if the server 
+// were to crash or go offline.
+
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "service";
+option java_outer_classname = "FitnessProto";
+
+package services;
+
+service Fitness {
+  rpc addExercise (AddRequest) returns (AddResponse) {}
+  rpc getExercise (GetRequest) returns (GetResponse) {}
+}
+
+enum ExerciseType {
+  CARDIO = 0;
+  STRENGTH = 1;
+  BALANCE = 2;
+}
+
+// Request to add new exercise
+message AddRequest {
+  Exercise exercise = 1;
+}
+
+// Response from the server
+message AddResponse {
+  bool isSuccess = 1;
+  string error = 2;
+}
+
+// Request a random exercise by type
+message GetRequest {
+  ExerciseType exerciseType = 1;
+}
+
+// Response from the server. Return a random exercise
+// if successful, otherwise a descriptive error message
+message GetResponse {
+  bool isSuccess = 1;
+  string error = 2;
+  Exercise exercise = 3;
+}
+
+// A single exercise
+message Exercise {
+  string description = 1;  // example: Run 1 mile
+  ExerciseType exerciseType = 2; // example: CARDIO
+}
+
