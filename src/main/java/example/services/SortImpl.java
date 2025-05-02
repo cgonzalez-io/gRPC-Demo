@@ -1,5 +1,7 @@
 package example.services;
 
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import service.SortGrpc;
 import service.SortRequest;
@@ -9,14 +11,42 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * gRPC implementation of the Sort service with robust error handling.
+ */
 public class SortImpl extends SortGrpc.SortImplBase {
 
     @Override
     public void sort(SortRequest request, StreamObserver<SortResponse> responseObserver) {
+        if (request == null) {
+            responseObserver.onError(
+                    new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Request cannot be null"))
+            );
+            return;
+        }
+
         List<Integer> input = request.getDataList();
-        List<Integer> output;
+        if (input == null) {
+            responseObserver.onError(
+                    new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Data list cannot be null"))
+            );
+            return;
+        }
+
+        // Empty list is valid: return success with empty data
+        if (input.isEmpty()) {
+            responseObserver.onNext(
+                    SortResponse.newBuilder()
+                            .setIsSuccess(true)
+                            .addAllData(Collections.emptyList())
+                            .build()
+            );
+            responseObserver.onCompleted();
+            return;
+        }
 
         try {
+            List<Integer> output;
             switch (request.getAlgo()) {
                 case MERGE:
                     output = mergeSort(input);
@@ -25,39 +55,42 @@ public class SortImpl extends SortGrpc.SortImplBase {
                     output = quickSort(input);
                     break;
                 case INTERN:
-                    // Use Java's built-in sort (TimSort for List)
                     output = new ArrayList<>(input);
                     Collections.sort(output);
                     break;
                 default:
-                    responseObserver.onNext(SortResponse.newBuilder()
-                            .setIsSuccess(false)
-                            .setError("Unknown sorting algorithm: " + request.getAlgo())
-                            .build());
-                    responseObserver.onCompleted();
+                    // Unknown enum value: invalid argument
+                    responseObserver.onError(
+                            new StatusRuntimeException(
+                                    Status.INVALID_ARGUMENT
+                                            .withDescription("Unknown sorting algorithm: " + request.getAlgo())
+                            )
+                    );
                     return;
             }
 
-            // Build successful response
-            SortResponse response = SortResponse.newBuilder()
-                    .setIsSuccess(true)
-                    .addAllData(output)
-                    .build();
-
-            responseObserver.onNext(response);
+            // Build and send successful response
+            responseObserver.onNext(
+                    SortResponse.newBuilder()
+                            .setIsSuccess(true)
+                            .addAllData(output)
+                            .build()
+            );
             responseObserver.onCompleted();
-        } catch (Exception e) {
-            // In case of unexpected error
-            SortResponse errorResp = SortResponse.newBuilder()
-                    .setIsSuccess(false)
-                    .setError("Sorting failed: " + e.getMessage())
-                    .build();
-            responseObserver.onNext(errorResp);
-            responseObserver.onCompleted();
+        } catch (RuntimeException e) {
+            // Unexpected server error
+            responseObserver.onError(
+                    new StatusRuntimeException(
+                            Status.INTERNAL
+                                    .withDescription("Sorting failed: " + e.getMessage())
+                    )
+            );
         }
     }
 
-    // Merge sort implementation
+    /**
+     * Merge sort implementation.
+     */
     private List<Integer> mergeSort(List<Integer> list) {
         if (list.size() <= 1) {
             return new ArrayList<>(list);
@@ -83,7 +116,9 @@ public class SortImpl extends SortGrpc.SortImplBase {
         return merged;
     }
 
-    // Quick sort implementation using a functional-style pivot partition
+    /**
+     * Quick sort implementation.
+     */
     private List<Integer> quickSort(List<Integer> list) {
         if (list.size() <= 1) {
             return new ArrayList<>(list);
