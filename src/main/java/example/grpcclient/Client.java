@@ -25,6 +25,7 @@ public class Client {
     private final RegistryGrpc.RegistryBlockingStub registryStub;
     private final CoffeePotGrpc.CoffeePotBlockingStub coffeeStub;
     private final SortGrpc.SortBlockingStub sortStub;
+    private final VigenereGrpc.VigenereBlockingStub vigenereStub;
 
     /**
      * Constructs a Client instance that initializes the stubs required for communication with various services.
@@ -38,6 +39,7 @@ public class Client {
         this.registryStub = RegistryGrpc.newBlockingStub(registryChannel);
         this.coffeeStub = CoffeePotGrpc.newBlockingStub(serviceChannel);
         this.sortStub = SortGrpc.newBlockingStub(serviceChannel);
+        this.vigenereStub = VigenereGrpc.newBlockingStub(serviceChannel);
     }
 
     /**
@@ -252,6 +254,77 @@ public class Client {
     // --- Interactive flows ---
 
     /**
+     * Encodes the provided plaintext using the Vigenere cipher through a gRPC call.
+     * <p>
+     * This method prompts the user for plaintext and a key, then sends these values
+     * to a remote gRPC service for encoding. The result is displayed to the user, or
+     * an error message is printed if the operation fails.
+     *
+     * @param reader a BufferedReader used to read user input for plaintext and key
+     * @param ch     a ManagedChannel for gRPC communication. If null, a default stub is used
+     * @throws IOException if an input/output error occurs during user input reading
+     */
+    // call methods for Vigenere
+    public void callEncode(BufferedReader reader, ManagedChannel ch) throws IOException {
+        System.out.print("Enter plaintext: ");
+        String plain = reader.readLine();
+        System.out.print("Enter key: ");
+        String key = reader.readLine();
+        try {
+            VigenereGrpc.VigenereBlockingStub stub = (ch != null)
+                    ? VigenereGrpc.newBlockingStub(ch)
+                    : vigenereStub;
+            EncodeResponse resp = stub.encode(
+                    EncodeRequest.newBuilder()
+                            .setPlaintext(plain)
+                            .setKey(key)
+                            .build());
+            if (!resp.getError()) {
+                System.out.println("Ciphertext: " + resp.getCiphertext());
+            } else {
+                System.err.println("Encode error: " + resp.getErrorMsg());
+            }
+        } catch (StatusRuntimeException e) {
+            System.err.println("Encode RPC failed: " + e.getStatus());
+        }
+    }
+
+    /**
+     * Invokes the decode operation on the Vigenère cipher service using the provided ciphertext and key.
+     * The ciphertext and key are read as input from the user. The method communicates with the service
+     * through the specified gRPC channel to decode the ciphertext into plaintext.
+     *
+     * @param reader the BufferedReader used to read user input for the ciphertext and key
+     * @param ch     the ManagedChannel used for gRPC communication with the decoding service;
+     *               if null, a default stub is used
+     * @throws IOException if an I/O error occurs while reading input from the BufferedReader
+     */
+    public void callDecode(BufferedReader reader, ManagedChannel ch) throws IOException {
+        System.out.print("Enter ciphertext: ");
+        String cipher = reader.readLine();
+        System.out.print("Enter key: ");
+        String key = reader.readLine();
+        try {
+            VigenereGrpc.VigenereBlockingStub stub = (ch != null)
+                    ? VigenereGrpc.newBlockingStub(ch)
+                    : vigenereStub;
+            DecodeResponse resp = stub.decode(
+                    DecodeRequest.newBuilder()
+                            .setCiphertext(cipher)
+                            .setKey(key)
+                            .build());
+            if (!resp.getError()) {
+                System.out.println("Plaintext: " + resp.getPlaintext());
+            } else {
+                System.err.println("Decode error: " + resp.getErrorMsg());
+            }
+        } catch (StatusRuntimeException e) {
+            System.err.println("Decode RPC failed: " + e.getStatus());
+        }
+
+    }
+
+    /**
      * Handles a dynamic flow of service selection, invocation, and execution
      * for a client interacting with a registry of services.
      *
@@ -310,10 +383,12 @@ public class Client {
         System.out.println("4) Get Cup");
         System.out.println("5) Brew Status");
         System.out.println("6) Sort");
+        System.out.println("7) Vigenere Encode");
+        System.out.println("8) Vigenere Decode");
         System.out.print("Enter choice: ");
         String line = reader.readLine();
         int choice = parseInt(line, -1);
-        if (choice < 1 || choice > 6) {
+        if (choice < 1 || choice > 8) {
             System.out.println("Invalid choice: " + line);
             return;
         }
@@ -335,6 +410,12 @@ public class Client {
                 break;
             case 6:
                 callSort(reader, null);
+                break;
+            case 7:
+                callEncode(reader, null);
+                break;
+            case 8:
+                callDecode(reader, null);
                 break;
         }
     }

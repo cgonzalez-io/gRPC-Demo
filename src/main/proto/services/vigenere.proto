@@ -1,0 +1,36 @@
+// encodes and decodes text using a vigenere cipher
+
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "service";
+option java_outer_classname = "VigenereProto";
+
+package services;
+
+service Vigenere {
+  rpc encode (EncodeRequest) returns (EncodeResponse) {}
+  rpc decode (DecodeRequest) returns (DecodeResponse) {}
+}
+
+message EncodeRequest {
+  string plaintext = 1;
+  string key = 2;
+}
+
+message EncodeResponse {
+  string ciphertext = 1;
+  bool error = 2;
+  string error_msg = 3;
+}
+
+message DecodeRequest {
+  string ciphertext = 1;
+  string key = 2;
+}
+
+message DecodeResponse {
+  string plaintext = 1;
+  bool error = 2;
+  string error_msg = 3;
+}
