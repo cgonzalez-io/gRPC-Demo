@@ -1,5 +1,7 @@
 package example.grpcclient;
 
+import example.services.CoffeePotImpl;
+import example.services.SortImpl;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerMethodDefinition;
@@ -76,6 +78,8 @@ public class Node {
         server = ServerBuilder.forPort(port)
                 .addService(new EchoImpl())
                 .addService(new JokeImpl())
+                .addService(new CoffeePotImpl())
+                .addService(new SortImpl())
                 .addService(new RegistryAnswerImpl(services)).build().start();
 
         for (var service : server.getServices()) {
