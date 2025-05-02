@@ -15,6 +15,10 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+/**
+ * Client with interactive mode and auto-run mode (-Dauto=1) for CLI or Gradle.
+ * Robust error handling added to prevent crashes on invalid input or RPC failures.
+ */
 public class Client {
     private final EchoGrpc.EchoBlockingStub echoStub;
     private final JokeGrpc.JokeBlockingStub jokeStub;
@@ -22,6 +26,12 @@ public class Client {
     private final CoffeePotGrpc.CoffeePotBlockingStub coffeeStub;
     private final SortGrpc.SortBlockingStub sortStub;
 
+    /**
+     * Constructs a Client instance that initializes the stubs required for communication with various services.
+     *
+     * @param serviceChannel  the gRPC channel used to communicate with the services like Echo, Joke, Coffee, and Sort
+     * @param registryChannel the gRPC channel used to communicate with the Registry service
+     */
     public Client(ManagedChannel serviceChannel, ManagedChannel registryChannel) {
         this.echoStub = EchoGrpc.newBlockingStub(serviceChannel);
         this.jokeStub = JokeGrpc.newBlockingStub(serviceChannel);
@@ -30,6 +40,18 @@ public class Client {
         this.sortStub = SortGrpc.newBlockingStub(serviceChannel);
     }
 
+    /**
+     * The main method serves as the entry point for the application. It initializes gRPC channels, parses command-line
+     * arguments, and manages the interactive or automated workflows based on the input parameters.
+     *
+     * @param args the command-line arguments, which must include:
+     *             args[0] - the hostname or IP address of the primary server
+     *             args[1] - the port number of the primary server
+     *             args[2] - the hostname or IP address of the registry server
+     *             args[3] - the port number of the registry server
+     *             args[4] - the initial message or user input for the workflow
+     *             args[5] - a boolean ("true" or "false") indicating whether the registry-based flow is enabled
+     */
     public static void main(String[] args) {
         if (args.length != 6) {
             System.err.println("Usage: <host> <port> <regHost> <regPort> <message> <regOn>");
@@ -38,43 +60,72 @@ public class Client {
 
         String host = args[0];
         int port;
-        String initialMessage = args[4];
-        boolean regOn;
+        String regHost = args[2];
         int regPort;
+        String message = args[4];
+        boolean regOn;
         try {
             port = Integer.parseInt(args[1]);
             regPort = Integer.parseInt(args[3]);
             regOn = Boolean.parseBoolean(args[5]);
         } catch (NumberFormatException e) {
-            System.err.println("Error parsing numeric argument: " + e.getMessage());
+            System.err.println("Invalid numeric argument: " + e.getMessage());
             return;
         }
 
-        ManagedChannel serviceChannel = ManagedChannelBuilder.forAddress(host, port)
+        ManagedChannel svcCh = ManagedChannelBuilder.forAddress(host, port)
                 .usePlaintext().build();
-        ManagedChannel registryChannel = ManagedChannelBuilder.forAddress(args[2], regPort)
+        ManagedChannel regCh = ManagedChannelBuilder.forAddress(regHost, regPort)
                 .usePlaintext().build();
 
         try {
-            Client client = new Client(serviceChannel, registryChannel);
+            Client client = new Client(svcCh, regCh);
             BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
             String autoProp = System.getProperty("auto");
-            if ("1".equals(autoProp)) {
-                AutoTestRunner autoTestRunner = new AutoTestRunner(client);
-                autoTestRunner.runAll();
-            } else if (regOn) {
-                client.dynamicFlow(reader, initialMessage);
-            } else {
-                client.staticMenu(reader, initialMessage);
+            // Wrap all flows in top-level try to catch unexpected exceptions
+            try {
+                if ("1".equals(autoProp)) {
+                    try {
+                        new AutoTestRunner(client).runAll();
+                    } catch (Exception ae) {
+                        System.err.println("Auto-run failed: " + ae.getMessage());
+                    }
+                } else if (regOn) {
+                    try {
+                        client.dynamicFlow(reader, message);
+                    } catch (IOException | StatusRuntimeException e) {
+                        System.err.println("Interactive (registry) flow error: " + e.getMessage());
+                    }
+                } else {
+                    try {
+                        client.staticMenu(reader, message);
+                    } catch (IOException | StatusRuntimeException e) {
+                        System.err.println("Interactive (local) menu error: " + e.getMessage());
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("Unexpected client error: " + e.getMessage());
             }
-        } catch (IOException e) {
-            System.err.println("I/O error: " + e.getMessage());
         } finally {
-            shutdownChannel(serviceChannel);
-            shutdownChannel(registryChannel);
+            shutdownChannel(svcCh);
+            shutdownChannel(regCh);
         }
     }
 
+    /**
+     * Shuts down the specified gRPC channel immediately and awaits termination
+     * for a specified duration.
+     * <p>
+     * This method terminates the channel immediately using `shutdownNow()`
+     * and waits for its termination up to 5 seconds. It ensures that the
+     * thread is not left in an interrupted state if `InterruptedException` occurs
+     * during the await termination process.
+     *
+     * @param channel the {@code ManagedChannel} to be shut down and terminated.
+     *                This channel must be non-null, and it represents an active
+     *                gRPC channel that needs to be properly closed to release
+     *                resources.
+     */
     private static void shutdownChannel(ManagedChannel channel) {
         try {
             channel.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
@@ -83,6 +134,17 @@ public class Client {
         }
     }
 
+    // --- RPC call helpers ---
+
+    /**
+     * Calls the Echo service to send a message and receive an echoed response.
+     * If a channel is provided, it creates a new EchoBlockingStub for the communication.
+     * If no channel is provided, it uses an existing stub.
+     *
+     * @param msg the message to be sent to the Echo service
+     * @param ch  the ManagedChannel used to establish the connection to the Echo service;
+     *            if null, the existing echoStub is used
+     */
     public void callEcho(String msg, ManagedChannel ch) {
         try {
             EchoGrpc.EchoBlockingStub stub = (ch != null)
@@ -95,32 +157,49 @@ public class Client {
         }
     }
 
+    /**
+     * Triggers the brew operation on the CoffeePot service.
+     *
+     * @param ch the gRPC communication channel through which the request is made. If null, the default coffeeStub will be used.
+     */
     public void callBrew(ManagedChannel ch) {
         try {
             CoffeePotGrpc.CoffeePotBlockingStub stub = (ch != null)
                     ? CoffeePotGrpc.newBlockingStub(ch)
                     : coffeeStub;
             BrewResponse resp = stub.brew(Empty.getDefaultInstance());
-            if (resp.getIsSuccess()) System.out.println(resp.getMessage());
-            else System.out.println("Error: " + resp.getError());
+            System.out.println(resp.getIsSuccess() ? resp.getMessage() : "Error: " + resp.getError());
         } catch (StatusRuntimeException e) {
             System.err.println("Brew RPC failed: " + e.getStatus());
         }
     }
 
+    /**
+     * Makes a gRPC call to retrieve a cup of coffee from the CoffeePot service.
+     * If a valid ManagedChannel is provided, it uses that channel to create a stub; otherwise, it uses a preconfigured stub.
+     * Logs the success message or the error depending on the response status.
+     * Handles any runtime exceptions that may occur during the RPC call.
+     *
+     * @param ch the gRPC ManagedChannel used to communicate with the CoffeePot service. If null, a preconfigured stub is used.
+     */
     public void callGetCup(ManagedChannel ch) {
         try {
             CoffeePotGrpc.CoffeePotBlockingStub stub = (ch != null)
                     ? CoffeePotGrpc.newBlockingStub(ch)
                     : coffeeStub;
             GetCupResponse resp = stub.getCup(Empty.getDefaultInstance());
-            if (resp.getIsSuccess()) System.out.println(resp.getMessage());
-            else System.out.println("Error: " + resp.getError());
+            System.out.println(resp.getIsSuccess() ? resp.getMessage() : "Error: " + resp.getError());
         } catch (StatusRuntimeException e) {
             System.err.println("GetCup RPC failed: " + e.getStatus());
         }
     }
 
+    /**
+     * Fetches and logs the brewing status from the CoffeePot service.
+     *
+     * @param ch The gRPC ManagedChannel used for communication with the CoffeePot service.
+     *           If this parameter is null, a default CoffeePotBlockingStub is used.
+     */
     public void callBrewStatus(ManagedChannel ch) {
         try {
             CoffeePotGrpc.CoffeePotBlockingStub stub = (ch != null)
@@ -135,27 +214,51 @@ public class Client {
         }
     }
 
+    /**
+     * Invokes the Joke service to retrieve and display a list of jokes.
+     *
+     * @param n  the number of jokes to retrieve from the service
+     * @param ch the gRPC managed channel to use for the request; if null, a default stub will be used
+     */
     public void callJokeValue(int n, ManagedChannel ch) {
         try {
             JokeRes resp = (ch != null ? JokeGrpc.newBlockingStub(ch) : jokeStub)
                     .getJoke(JokeReq.newBuilder().setNumber(n).build());
             resp.getJokeList().forEach(j -> System.out.println("- " + j));
-        } catch (Exception e) {
-            System.err.println("Joke RPC failed: " + e.getMessage());
+        } catch (StatusRuntimeException e) {
+            System.err.println("Joke RPC failed: " + e.getStatus());
         }
     }
 
+    /**
+     * Calls the sort service to sort a list of integers using the specified algorithm.
+     * This method interacts with the remote Sort service via gRPC.
+     *
+     * @param data the list of integers to be sorted
+     * @param algo the sorting algorithm to be applied (e.g., MERGE, QUICK, INTERN)
+     * @param ch   the managed gRPC channel used to communicate with the Sort service;
+     *             if null, a default stub will be used
+     */
     public void callSortList(List<Integer> data, Algo algo, ManagedChannel ch) {
         try {
             SortResponse resp = (ch != null ? SortGrpc.newBlockingStub(ch) : sortStub)
                     .sort(SortRequest.newBuilder().addAllData(data).setAlgo(algo).build());
-            if (resp.getIsSuccess()) System.out.println("Sorted: " + resp.getDataList());
-            else System.out.println("Error: " + resp.getError());
+            System.out.println(resp.getIsSuccess() ? "Sorted: " + resp.getDataList() : "Error: " + resp.getError());
         } catch (StatusRuntimeException e) {
             System.err.println("Sort RPC failed: " + e.getStatus());
         }
     }
 
+    // --- Interactive flows ---
+
+    /**
+     * Handles a dynamic flow of service selection, invocation, and execution
+     * for a client interacting with a registry of services.
+     *
+     * @param reader         a BufferedReader used to read user inputs, such as service selection
+     * @param initialMessage an initial message to be passed to the invoked service for processing
+     * @throws IOException if there is an error reading from the given BufferedReader or during service invocation
+     */
     private void dynamicFlow(BufferedReader reader, String initialMessage) throws IOException {
         try {
             ServicesListRes servicesRes = registryStub.getServices(GetServicesReq.newBuilder().build());
@@ -180,18 +283,25 @@ public class Client {
                     FindServerReq.newBuilder().setServiceName(fullService).build());
             Connection conn = srvRes.getConnection();
 
-            ManagedChannel dynChannel = ManagedChannelBuilder.forAddress(conn.getUri(), conn.getPort())
+            ManagedChannel dynCh = ManagedChannelBuilder.forAddress(conn.getUri(), conn.getPort())
                     .usePlaintext().build();
             try {
-                invokeByMethod(fullService, initialMessage, reader, dynChannel);
+                invokeByMethod(fullService, initialMessage, reader, dynCh);
             } finally {
-                shutdownChannel(dynChannel);
+                shutdownChannel(dynCh);
             }
         } catch (StatusRuntimeException e) {
             System.err.println("Registry RPC failed: " + e.getStatus());
         }
     }
 
+    /**
+     * Displays a static menu with predefined options and executes the corresponding service based on the user's choice.
+     *
+     * @param reader         a {@code BufferedReader} instance used to read the user's input
+     * @param initialMessage the initial message to be processed or passed to certain service calls
+     * @throws IOException if there is an error reading input from the {@code BufferedReader}
+     */
     private void staticMenu(BufferedReader reader, String initialMessage) throws IOException {
         System.out.println("Select service to call:");
         System.out.println("1) Echo");
@@ -201,8 +311,12 @@ public class Client {
         System.out.println("5) Brew Status");
         System.out.println("6) Sort");
         System.out.print("Enter choice: ");
-        int choice = parseInt(reader.readLine(), -1);
-
+        String line = reader.readLine();
+        int choice = parseInt(line, -1);
+        if (choice < 1 || choice > 6) {
+            System.out.println("Invalid choice: " + line);
+            return;
+        }
         switch (choice) {
             case 1:
                 callEcho(initialMessage, null);
@@ -222,11 +336,19 @@ public class Client {
             case 6:
                 callSort(reader, null);
                 break;
-            default:
-                System.out.println("Invalid choice.");
         }
     }
 
+    /**
+     * Invokes a gRPC method based on the provided full service name and performs
+     * the corresponding action.
+     *
+     * @param fullService the full service name in the format "service/method"
+     * @param msg         a message string used for the "parrot" method
+     * @param reader      a BufferedReader object for reading user input in certain methods
+     * @param ch          a ManagedChannel instance used to communicate with the gRPC service
+     * @throws IOException if an I/O error occurs during method execution
+     */
     private void invokeByMethod(String fullService, String msg, BufferedReader reader, ManagedChannel ch) throws IOException {
         String method = fullService.substring(fullService.lastIndexOf('/') + 1);
         switch (method) {
@@ -253,6 +375,15 @@ public class Client {
         }
     }
 
+    /**
+     * Parses the provided string to an integer. If parsing fails due to a
+     * {@link NumberFormatException}, the provided default value will be returned.
+     *
+     * @param s          the string to parse into an integer. It is trimmed of leading and trailing
+     *                   whitespace before parsing.
+     * @param defaultVal the value to return if parsing fails.
+     * @return the parsed integer value of the string, or the default value if parsing fails.
+     */
     private int parseInt(String s, int defaultVal) {
         try {
             return Integer.parseInt(s.trim());
@@ -261,20 +392,26 @@ public class Client {
         }
     }
 
+    /**
+     * Prompts the user for the number of jokes to request and invokes the method to fetch jokes.
+     *
+     * @param reader A BufferedReader for reading user input.
+     * @param ch     A ManagedChannel for gRPC communication.
+     * @throws IOException If an I/O error occurs during input reading.
+     */
     private void callJoke(BufferedReader reader, ManagedChannel ch) throws IOException {
         System.out.print("How many jokes? ");
         int n = parseInt(reader.readLine(), 0);
-        try {
-            JokeGrpc.JokeBlockingStub stub = (ch != null)
-                    ? JokeGrpc.newBlockingStub(ch)
-                    : jokeStub;
-            JokeRes resp = stub.getJoke(JokeReq.newBuilder().setNumber(n).build());
-            resp.getJokeList().forEach(j -> System.out.println("- " + j));
-        } catch (StatusRuntimeException e) {
-            System.err.println("Joke RPC failed: " + e.getStatus());
-        }
+        callJokeValue(n, ch);
     }
 
+    /**
+     * Reads a list of integers and a sorting algorithm choice from the user, then performs a sorting operation.
+     *
+     * @param reader The {@link BufferedReader} used to read input from the user.
+     * @param ch     The {@link ManagedChannel} used for communication with the remote service.
+     * @throws IOException If an I/O error occurs while reading user input.
+     */
     private void callSort(BufferedReader reader, ManagedChannel ch) throws IOException {
         System.out.print("Enter numbers (comma-separated): ");
         List<Integer> data = Arrays.stream(reader.readLine().split(","))
@@ -282,20 +419,13 @@ public class Client {
                 .filter(val -> val != Integer.MIN_VALUE)
                 .collect(Collectors.toList());
         System.out.print("Choose algo (0=MERGE,1=QUICK,2=INTERN): ");
-        int idx = parseInt(reader.readLine(), 2);
+        int idx = parseInt(reader.readLine(), -1);
         Algo algo = Algo.forNumber(idx);
-        try {
-            SortGrpc.SortBlockingStub stub = (ch != null)
-                    ? SortGrpc.newBlockingStub(ch)
-                    : sortStub;
-            SortResponse resp = stub.sort(
-                    SortRequest.newBuilder().setAlgo(algo).addAllData(data).build()
-            );
-            if (resp.getIsSuccess()) System.out.println("Sorted: " + resp.getDataList());
-            else System.out.println("Error: " + resp.getError());
-        } catch (StatusRuntimeException e) {
-            System.err.println("Sort RPC failed: " + e.getStatus());
+        if (algo == null) {
+            System.out.println("Invalid algorithm selection: " + idx);
+            return;
         }
+        callSortList(data, algo, ch);
     }
 }
 
