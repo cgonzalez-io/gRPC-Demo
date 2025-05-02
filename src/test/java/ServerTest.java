@@ -1,18 +1,13 @@
-import com.google.protobuf.Empty;
-import example.grpcclient.Client;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
-import org.junit.Test;
-import static org.junit.Assert.*;
-import org.json.JSONObject;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import service.*;
 
-import java.io.*;
-import java.net.Socket;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 
 public class ServerTest {
@@ -22,7 +17,7 @@ public class ServerTest {
     private JokeGrpc.JokeBlockingStub blockingStub2;
 
 
-    @org.junit.Before
+    @BeforeEach
     public void setUp() throws Exception {
         // assuming default port and localhost for our testing, make sure Node runs on this port
         channel = ManagedChannelBuilder.forTarget("localhost:8000").usePlaintext().build();
@@ -31,7 +26,7 @@ public class ServerTest {
         blockingStub2 = JokeGrpc.newBlockingStub(channel);
     }
 
-    @org.junit.After
+    @AfterEach
     public void close() throws Exception {
         channel.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
 
