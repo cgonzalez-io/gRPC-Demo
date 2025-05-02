@@ -3,6 +3,9 @@ package example.services;
 import io.grpc.stub.StreamObserver;
 import service.*;
 
+import java.util.ArrayList;
+import java.util.List;
+
 
 /**
  * The VigenereImpl class extends VigenereGrpc.VigenereImplBase and implements
@@ -11,6 +14,8 @@ import service.*;
  * while ensuring input validation and error handling.
  */
 public class VigenereImpl extends VigenereGrpc.VigenereImplBase {
+
+    private final List<String> history = new ArrayList<>();
 
     /**
      * Encodes a given plaintext string with the Vigenère cipher using the provided key.
@@ -53,6 +58,7 @@ public class VigenereImpl extends VigenereGrpc.VigenereImplBase {
                     cipher.append(c);
                 }
             }
+            history.add("E:" + req.getPlaintext() + "->" + cipher);
             obs.onNext(EncodeResponse.newBuilder()
                     .setCiphertext(cipher.toString())
                     .setError(false)
@@ -112,6 +118,7 @@ public class VigenereImpl extends VigenereGrpc.VigenereImplBase {
                     plain.append(c);
                 }
             }
+            history.add("D:" + req.getCiphertext() + "->" + plain);
             obs.onNext(DecodeResponse.newBuilder()
                     .setPlaintext(plain.toString())
                     .setError(false)
@@ -129,5 +136,20 @@ public class VigenereImpl extends VigenereGrpc.VigenereImplBase {
         } finally {
             obs.onCompleted();
         }
+    }
+
+    /**
+     * Retrieves the history of completed operations and sends it back to the client.
+     *
+     * @param req the HistoryRequest object sent by the client to request the operation history
+     * @param obs the StreamObserver used to send the HistoryResponse containing the list of operations back to the client
+     */
+    @Override
+    public void history(HistoryRequest req, StreamObserver<HistoryResponse> obs) {
+        HistoryResponse resp = HistoryResponse.newBuilder()
+                .addAllOperations(history)
+                .build();
+        obs.onNext(resp);
+        obs.onCompleted();
     }
 }

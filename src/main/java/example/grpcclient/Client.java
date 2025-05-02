@@ -325,6 +325,27 @@ public class Client {
     }
 
     /**
+     * Retrieves and prints the Vigenere cipher operation history from a remote service.
+     *
+     * @param reader the BufferedReader used for potential user input (not utilized in this method)
+     * @param ch     the ManagedChannel for communication with the remote service; if null, a default stub is used
+     */
+    public void callHistory(BufferedReader reader, ManagedChannel ch) {
+        try {
+            VigenereGrpc.VigenereBlockingStub stub = (ch != null)
+                    ? VigenereGrpc.newBlockingStub(ch)
+                    : vigenereStub;
+            HistoryResponse resp = stub.history(HistoryRequest.getDefaultInstance());
+            System.out.println("Vigenere history:");
+            for (String op : resp.getOperationsList()) {
+                System.out.println("• " + op);
+            }
+        } catch (StatusRuntimeException e) {
+            System.err.println("History RPC failed: " + e.getStatus());
+        }
+    }
+
+    /**
      * Handles a dynamic flow of service selection, invocation, and execution
      * for a client interacting with a registry of services.
      *
@@ -385,10 +406,11 @@ public class Client {
         System.out.println("6) Sort");
         System.out.println("7) Vigenere Encode");
         System.out.println("8) Vigenere Decode");
+        System.out.println("9) Vigenere History");
         System.out.print("Enter choice: ");
         String line = reader.readLine();
         int choice = parseInt(line, -1);
-        if (choice < 1 || choice > 8) {
+        if (choice < 1 || choice > 9) {
             System.out.println("Invalid choice: " + line);
             return;
         }
@@ -416,6 +438,9 @@ public class Client {
                 break;
             case 8:
                 callDecode(reader, null);
+                break;
+            case 9:
+                callHistory(reader, null);
                 break;
         }
     }
@@ -450,6 +475,15 @@ public class Client {
                 break;
             case "sort":
                 callSort(reader, ch);
+                break;
+            case "encode":
+                callEncode(reader, ch);
+                break;
+            case "decode":
+                callDecode(reader, ch);
+                break;
+            case "history":
+                callHistory(reader, ch);
                 break;
             default:
                 System.out.println("Unknown method: " + method);

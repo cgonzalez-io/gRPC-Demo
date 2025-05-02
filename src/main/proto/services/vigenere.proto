@@ -11,6 +11,7 @@ package services;
 service Vigenere {
   rpc encode (EncodeRequest) returns (EncodeResponse) {}
   rpc decode (DecodeRequest) returns (DecodeResponse) {}
+  rpc history (HistoryRequest) returns (HistoryResponse) {}
 }
 
 message EncodeRequest {
@@ -33,4 +34,11 @@ message DecodeResponse {
   string plaintext = 1;
   bool error = 2;
   string error_msg = 3;
+}
+
+message HistoryRequest {
+}
+
+message HistoryResponse {
+  repeated string operations = 1; // e.g. "E:HELLO->KHOOR", "D:KHOOR->HELLO"
 }
