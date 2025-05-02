@@ -1,6 +1,7 @@
 package example.grpcclient;
 
 import com.google.protobuf.Empty;
+import example.scenarios.AutoTestRunner;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
@@ -57,8 +58,11 @@ public class Client {
         try {
             Client client = new Client(serviceChannel, registryChannel);
             BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
-
-            if (regOn) {
+            String autoProp = System.getProperty("auto");
+            if ("1".equals(autoProp)) {
+                AutoTestRunner autoTestRunner = new AutoTestRunner(client);
+                autoTestRunner.runAll();
+            } else if (regOn) {
                 client.dynamicFlow(reader, initialMessage);
             } else {
                 client.staticMenu(reader, initialMessage);
@@ -76,6 +80,79 @@ public class Client {
             channel.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+    }
+
+    public void callEcho(String msg, ManagedChannel ch) {
+        try {
+            EchoGrpc.EchoBlockingStub stub = (ch != null)
+                    ? EchoGrpc.newBlockingStub(ch)
+                    : echoStub;
+            ServerResponse resp = stub.parrot(ClientRequest.newBuilder().setMessage(msg).build());
+            System.out.println("Echo: " + (resp.getIsSuccess() ? resp.getMessage() : resp.getError()));
+        } catch (StatusRuntimeException e) {
+            System.err.println("Echo RPC failed: " + e.getStatus());
+        }
+    }
+
+    public void callBrew(ManagedChannel ch) {
+        try {
+            CoffeePotGrpc.CoffeePotBlockingStub stub = (ch != null)
+                    ? CoffeePotGrpc.newBlockingStub(ch)
+                    : coffeeStub;
+            BrewResponse resp = stub.brew(Empty.getDefaultInstance());
+            if (resp.getIsSuccess()) System.out.println(resp.getMessage());
+            else System.out.println("Error: " + resp.getError());
+        } catch (StatusRuntimeException e) {
+            System.err.println("Brew RPC failed: " + e.getStatus());
+        }
+    }
+
+    public void callGetCup(ManagedChannel ch) {
+        try {
+            CoffeePotGrpc.CoffeePotBlockingStub stub = (ch != null)
+                    ? CoffeePotGrpc.newBlockingStub(ch)
+                    : coffeeStub;
+            GetCupResponse resp = stub.getCup(Empty.getDefaultInstance());
+            if (resp.getIsSuccess()) System.out.println(resp.getMessage());
+            else System.out.println("Error: " + resp.getError());
+        } catch (StatusRuntimeException e) {
+            System.err.println("GetCup RPC failed: " + e.getStatus());
+        }
+    }
+
+    public void callBrewStatus(ManagedChannel ch) {
+        try {
+            CoffeePotGrpc.CoffeePotBlockingStub stub = (ch != null)
+                    ? CoffeePotGrpc.newBlockingStub(ch)
+                    : coffeeStub;
+            BrewStatusResponse resp = stub.brewStatus(Empty.getDefaultInstance());
+            BrewStatus status = resp.getStatus();
+            System.out.printf("Status: %s (%dm %ds)%n",
+                    status.getMessage(), status.getMinutes(), status.getSeconds());
+        } catch (StatusRuntimeException e) {
+            System.err.println("Status RPC failed: " + e.getStatus());
+        }
+    }
+
+    public void callJokeValue(int n, ManagedChannel ch) {
+        try {
+            JokeRes resp = (ch != null ? JokeGrpc.newBlockingStub(ch) : jokeStub)
+                    .getJoke(JokeReq.newBuilder().setNumber(n).build());
+            resp.getJokeList().forEach(j -> System.out.println("- " + j));
+        } catch (Exception e) {
+            System.err.println("Joke RPC failed: " + e.getMessage());
+        }
+    }
+
+    public void callSortList(List<Integer> data, Algo algo, ManagedChannel ch) {
+        try {
+            SortResponse resp = (ch != null ? SortGrpc.newBlockingStub(ch) : sortStub)
+                    .sort(SortRequest.newBuilder().addAllData(data).setAlgo(algo).build());
+            if (resp.getIsSuccess()) System.out.println("Sorted: " + resp.getDataList());
+            else System.out.println("Error: " + resp.getError());
+        } catch (StatusRuntimeException e) {
+            System.err.println("Sort RPC failed: " + e.getStatus());
         }
     }
 
@@ -184,18 +261,6 @@ public class Client {
         }
     }
 
-    private void callEcho(String msg, ManagedChannel ch) {
-        try {
-            EchoGrpc.EchoBlockingStub stub = (ch != null)
-                    ? EchoGrpc.newBlockingStub(ch)
-                    : echoStub;
-            ServerResponse resp = stub.parrot(ClientRequest.newBuilder().setMessage(msg).build());
-            System.out.println("Echo: " + (resp.getIsSuccess() ? resp.getMessage() : resp.getError()));
-        } catch (StatusRuntimeException e) {
-            System.err.println("Echo RPC failed: " + e.getStatus());
-        }
-    }
-
     private void callJoke(BufferedReader reader, ManagedChannel ch) throws IOException {
         System.out.print("How many jokes? ");
         int n = parseInt(reader.readLine(), 0);
@@ -207,46 +272,6 @@ public class Client {
             resp.getJokeList().forEach(j -> System.out.println("- " + j));
         } catch (StatusRuntimeException e) {
             System.err.println("Joke RPC failed: " + e.getStatus());
-        }
-    }
-
-    private void callBrew(ManagedChannel ch) {
-        try {
-            CoffeePotGrpc.CoffeePotBlockingStub stub = (ch != null)
-                    ? CoffeePotGrpc.newBlockingStub(ch)
-                    : coffeeStub;
-            BrewResponse resp = stub.brew(Empty.getDefaultInstance());
-            if (resp.getIsSuccess()) System.out.println(resp.getMessage());
-            else System.out.println("Error: " + resp.getError());
-        } catch (StatusRuntimeException e) {
-            System.err.println("Brew RPC failed: " + e.getStatus());
-        }
-    }
-
-    private void callGetCup(ManagedChannel ch) {
-        try {
-            CoffeePotGrpc.CoffeePotBlockingStub stub = (ch != null)
-                    ? CoffeePotGrpc.newBlockingStub(ch)
-                    : coffeeStub;
-            GetCupResponse resp = stub.getCup(Empty.getDefaultInstance());
-            if (resp.getIsSuccess()) System.out.println(resp.getMessage());
-            else System.out.println("Error: " + resp.getError());
-        } catch (StatusRuntimeException e) {
-            System.err.println("GetCup RPC failed: " + e.getStatus());
-        }
-    }
-
-    private void callBrewStatus(ManagedChannel ch) {
-        try {
-            CoffeePotGrpc.CoffeePotBlockingStub stub = (ch != null)
-                    ? CoffeePotGrpc.newBlockingStub(ch)
-                    : coffeeStub;
-            BrewStatusResponse resp = stub.brewStatus(Empty.getDefaultInstance());
-            BrewStatus status = resp.getStatus();
-            System.out.printf("Status: %s (%dm %ds)%n",
-                    status.getMessage(), status.getMinutes(), status.getSeconds());
-        } catch (StatusRuntimeException e) {
-            System.err.println("Status RPC failed: " + e.getStatus());
         }
     }
 
