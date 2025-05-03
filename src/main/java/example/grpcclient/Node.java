@@ -6,6 +6,8 @@ import example.services.VigenereImpl;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerMethodDefinition;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -19,6 +21,8 @@ import java.util.concurrent.TimeUnit;
  * Server that manages startup/shutdown of the `Node`.
  */
 public class Node {
+    private static final Logger logger = LoggerFactory.getLogger(Node.class);
+
     static private Server server;
     int port;
 
@@ -40,6 +44,7 @@ public class Node {
     public static void main(String[] args) throws IOException, InterruptedException {
         if (args.length != 6) {
             System.out.println("Expected arguments: <regAddr(string)> <regPort(int)> <nodeAddr(string)> <nodePort(int)> <name(String)> <registerOn(bool)>");
+            logger.error("Expected arguments: <regAddr(string)> <regPort(int)> <nodeAddr(string)> <nodePort(int)> <name(String)> <registerOn(bool)>");
             System.exit(1);
         }
         int regPort = 9003;
@@ -49,26 +54,26 @@ public class Node {
             nodePort = Integer.parseInt(args[3]);
         } catch (NumberFormatException nfe) {
             System.out.println("[Port] must be an integer");
+            logger.error("[Port] must be an integer");
             System.exit(2);
         }
         final Node server = new Node(nodePort);
+        logger.info("Starting Node on port {}", nodePort);
         System.out.println(args[0]);
         System.out.println(args[1]);
         System.out.println(args[2]);
         System.out.println(args[3]);
-
         System.out.println(args[4]);
+        System.out.println(args[5]);
+        logger.info("reg address: {}, reg port {}, node address: {}, node port {}, name: {}, registerOn: {}", args[0], regPort, args[2], nodePort, args[4], args[5]);
 
         // Comment the next 2 lines for your local client server development (Activity 2 task 1, you need this part again for Task 2)
         if (args[5].equals("true")) { // since I am too lazy to convert it to bool
-
             Register regThread = new Register(args[0], regPort, args[2], nodePort, args[4]);
+            logger.info("Registering on port {}", regPort);
             regThread.start();
         }
-
-
         server.start();
-
         server.blockUntilShutdown();
     }
 
@@ -89,6 +94,7 @@ public class Node {
             for (ServerMethodDefinition<?, ?> method : service.getMethods()) {
                 services.add(method.getMethodDescriptor().getFullMethodName());
                 System.out.println(method.getMethodDescriptor().getFullMethodName());
+                logger.info("Service: {}", method.getMethodDescriptor().getFullMethodName());
             }
         }
 
@@ -103,6 +109,7 @@ public class Node {
                     Node.this.stop();
                 } catch (InterruptedException e) {
                     e.printStackTrace(System.err);
+                    logger.error("Error while shutting down server", e);
                 }
                 System.err.println("*** server shut down");
             }
@@ -111,6 +118,7 @@ public class Node {
 
     private void stop() throws InterruptedException {
         if (server != null) {
+            logger.info("Shutting down gRPC server since JVM is shutting down");
             server.shutdown().awaitTermination(30, TimeUnit.SECONDS);
         }
     }
@@ -121,6 +129,7 @@ public class Node {
      */
     private void blockUntilShutdown() throws InterruptedException {
         if (server != null) {
+            logger.info("Waiting for gRPC server to terminate");
             server.awaitTermination();
         }
     }

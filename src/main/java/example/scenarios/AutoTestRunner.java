@@ -3,6 +3,9 @@ package example.scenarios;
 import example.grpcclient.Client;
 import service.Algo;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.StringReader;
 import java.util.Arrays;
 import java.util.List;
 
@@ -20,7 +23,7 @@ public class AutoTestRunner {
     /**
      * Execute all predefined test scenarios (both successful and error cases).
      */
-    public void runAll() {
+    public void runAll() throws IOException {
         System.out.println("=== AUTO TESTS START ===");
 
         // Echo tests
@@ -58,6 +61,27 @@ public class AutoTestRunner {
         client.callSortList(list, Algo.INTERN, null);
         System.out.println("[Sort] invalid algo -> expecting error");
         client.callSortList(list, Algo.forNumber(99), null);
+
+        // --- Vigenère auto-tests ---
+        System.out.println("-- Vigenère: encode HELLO/KEY --");
+        BufferedReader enc1 = new BufferedReader(new StringReader("HELLO\nKEY\n"));
+        client.callEncode(enc1, null);
+
+        System.out.println("-- Vigenère: decode RIJVS/KEY --");
+        BufferedReader dec1 = new BufferedReader(new StringReader("RIJVS\nKEY\n"));
+        client.callDecode(dec1, null);
+
+        System.out.println("-- Vigenère: encode empty/plain error --");
+        BufferedReader enc2 = new BufferedReader(new StringReader("\nKEY\n"));
+        client.callEncode(enc2, null);
+
+        System.out.println("-- Vigenère: decode wrong key error --");
+        BufferedReader dec2 = new BufferedReader(new StringReader("RIJVS\nBAD\n"));
+        client.callDecode(dec2, null);
+
+        System.out.println("-- Vigenère: history --");
+        // history() doesn’t need a reader, so just pass a dummy one or null:
+        client.callHistory(null, null);
 
         System.out.println("=== AUTO TESTS END ===");
     }

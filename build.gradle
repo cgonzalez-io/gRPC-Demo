@@ -176,7 +176,6 @@ tasks.register('runClient', JavaExec) {
     args grpcPort
     args message
     args regOn
-    args auto
 }
 
 // runs a service node which already has the echo and joke service included

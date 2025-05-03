@@ -5,6 +5,8 @@ import example.scenarios.AutoTestRunner;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import service.*;
 
 import java.io.BufferedReader;
@@ -20,6 +22,7 @@ import java.util.stream.Collectors;
  * Robust error handling added to prevent crashes on invalid input or RPC failures.
  */
 public class Client {
+    private static final Logger logger = LoggerFactory.getLogger(Client.class);
     private final EchoGrpc.EchoBlockingStub echoStub;
     private final JokeGrpc.JokeBlockingStub jokeStub;
     private final RegistryGrpc.RegistryBlockingStub registryStub;
@@ -53,17 +56,20 @@ public class Client {
      *             args[3] - the port number of the registry server
      *             args[4] - the initial message or user input for the workflow
      *             args[5] - a boolean ("true" or "false") indicating whether the registry-based flow is enabled
+     *             optional property auto -Pauto= - the auto-run flag (1 for auto-run, 0 for manual)
      */
     public static void main(String[] args) {
         if (args.length != 6) {
             System.err.println("Usage: <host> <port> <regHost> <regPort> <message> <regOn>");
+            logger.error("Usage: <host> <port> <regHost> <regPort> <message> <regOn>");
+            logger.info("Passed arguments: {}", Arrays.toString(args));
             return;
         }
 
         String host = args[0];
-        int port;
+        int port = 9099;
         String regHost = args[2];
-        int regPort;
+        int regPort = 9003;
         String message = args[4];
         boolean regOn;
         try {
@@ -386,6 +392,13 @@ public class Client {
             }
         } catch (StatusRuntimeException e) {
             System.err.println("Registry RPC failed: " + e.getStatus());
+            logger.error("Registry RPC failed: {}", e.getStatus());
+        } catch (IOException e) {
+            System.err.println("I/O error: " + e.getMessage());
+            logger.error("I/O error: {}", e.getMessage());
+        } catch (Exception e) {
+            System.err.println("Unexpected error: " + e.getMessage());
+            logger.error("Unexpected error: {}", e.getMessage());
         }
     }
 
