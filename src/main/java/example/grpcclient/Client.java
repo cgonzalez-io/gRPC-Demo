@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -23,12 +24,14 @@ import java.util.stream.Collectors;
  */
 public class Client {
     private static final Logger logger = LoggerFactory.getLogger(Client.class);
+    private static final String INVALID_CHAR_REGEX = "[^a-zA-Z0-9,&]";
     private final EchoGrpc.EchoBlockingStub echoStub;
     private final JokeGrpc.JokeBlockingStub jokeStub;
     private final RegistryGrpc.RegistryBlockingStub registryStub;
     private final CoffeePotGrpc.CoffeePotBlockingStub coffeeStub;
     private final SortGrpc.SortBlockingStub sortStub;
     private final VigenereGrpc.VigenereBlockingStub vigenereStub;
+    private final char separator = '&';
 
     /**
      * Constructs a Client instance that initializes the stubs required for communication with various services.
@@ -120,6 +123,8 @@ public class Client {
         }
     }
 
+    // --- RPC call helpers ---
+
     /**
      * Shuts down the specified gRPC channel immediately and awaits termination
      * for a specified duration.
@@ -141,8 +146,6 @@ public class Client {
             Thread.currentThread().interrupt();
         }
     }
-
-    // --- RPC call helpers ---
 
     /**
      * Calls the Echo service to send a message and receive an echoed response.
@@ -238,6 +241,8 @@ public class Client {
         }
     }
 
+    // --- Interactive flows ---
+
     /**
      * Calls the sort service to sort a list of integers using the specified algorithm.
      * This method interacts with the remote Sort service via gRPC.
@@ -257,8 +262,6 @@ public class Client {
         }
     }
 
-    // --- Interactive flows ---
-
     /**
      * Encodes the provided plaintext using the Vigenere cipher through a gRPC call.
      * <p>
@@ -274,8 +277,28 @@ public class Client {
     public void callEncode(BufferedReader reader, ManagedChannel ch) throws IOException {
         System.out.print("Enter plaintext: ");
         String plain = reader.readLine();
+        if (plain == null || plain.isEmpty()) {
+            System.out.println("Plaintext cannot be empty.");
+            return;
+        }
+        if (!plain.chars().allMatch(Character::isLetter)) {
+            System.out.println("Plaintext must only contain letters.");
+            return;
+        }
+        printProcessedInput(plain, false);
         System.out.print("Enter key: ");
         String key = reader.readLine();
+        if (key == null || key.isEmpty()) {
+            System.out.println("Key cannot be empty.");
+            return;
+        }
+        if (!key.chars().allMatch(Character::isLetter)) {
+            System.out.println("Key must only contain letters.");
+            return;
+        }
+        printProcessedInput(key, false);
+        //readback request to user via console
+        printProcessedInput(plain + separator + key, true);
         try {
             VigenereGrpc.VigenereBlockingStub stub = (ch != null)
                     ? VigenereGrpc.newBlockingStub(ch)
@@ -308,8 +331,29 @@ public class Client {
     public void callDecode(BufferedReader reader, ManagedChannel ch) throws IOException {
         System.out.print("Enter ciphertext: ");
         String cipher = reader.readLine();
+        if (cipher == null || cipher.isEmpty()) {
+            System.out.println("Ciphertext cannot be empty.");
+            return;
+        }
+        if (!cipher.chars().allMatch(Character::isLetter)) {
+            System.out.println("Ciphertext must only contain letters.");
+            return;
+        }
+        printProcessedInput(cipher, false);
         System.out.print("Enter key: ");
         String key = reader.readLine();
+        if (key == null || key.isEmpty()) {
+            System.out.println("Key cannot be empty.");
+            return;
+        }
+        if (!key.chars().allMatch(Character::isLetter)) {
+            System.out.println("Key must only contain letters.");
+            return;
+        }
+        printProcessedInput(key, false);
+
+        //readback request to user via console
+        printProcessedInput(cipher + separator + key, true);
         try {
             VigenereGrpc.VigenereBlockingStub stub = (ch != null)
                     ? VigenereGrpc.newBlockingStub(ch)
@@ -372,7 +416,7 @@ public class Client {
                 System.out.printf("%d) %s%n", i + 1, services.get(i));
             }
             System.out.print("Select a service by number: ");
-            int sel = parseInt(reader.readLine(), -1) - 1;
+            int sel = parseInt(reader.readLine(), -1).orElse(-1) - 1;
             if (sel < 0 || sel >= services.size()) {
                 System.out.println("Invalid selection.");
                 return;
@@ -422,7 +466,7 @@ public class Client {
         System.out.println("9) Vigenere History");
         System.out.print("Enter choice: ");
         String line = reader.readLine();
-        int choice = parseInt(line, -1);
+        int choice = parseInt(line, -1).orElse(-1);
         if (choice < 1 || choice > 9) {
             System.out.println("Invalid choice: " + line);
             return;
@@ -504,23 +548,6 @@ public class Client {
     }
 
     /**
-     * Parses the provided string to an integer. If parsing fails due to a
-     * {@link NumberFormatException}, the provided default value will be returned.
-     *
-     * @param s          the string to parse into an integer. It is trimmed of leading and trailing
-     *                   whitespace before parsing.
-     * @param defaultVal the value to return if parsing fails.
-     * @return the parsed integer value of the string, or the default value if parsing fails.
-     */
-    private int parseInt(String s, int defaultVal) {
-        try {
-            return Integer.parseInt(s.trim());
-        } catch (NumberFormatException e) {
-            return defaultVal;
-        }
-    }
-
-    /**
      * Prompts the user for the number of jokes to request and invokes the method to fetch jokes.
      *
      * @param reader A BufferedReader for reading user input.
@@ -529,8 +556,34 @@ public class Client {
      */
     private void callJoke(BufferedReader reader, ManagedChannel ch) throws IOException {
         System.out.print("How many jokes? ");
-        int n = parseInt(reader.readLine(), 0);
+        int n = parseInt(reader.readLine(), 0).orElse(0);
+        if (n < 0) {
+            System.out.println("Invalid number of jokes: " + n);
+            return;
+        }
+        printProcessedInput(String.valueOf(n), false);
         callJokeValue(n, ch);
+    }
+
+    /**
+     * Attempts to parse the given string into an {@code Integer}. If the input is null
+     * or cannot be parsed into a valid integer, an empty {@code Optional} is returned.
+     * Logs errors for invalid or null inputs.
+     *
+     * @param s the input string to be parsed; may be null or contain non-numeric characters
+     * @return an {@code Optional} containing the parsed integer if successful, or an empty {@code Optional} if parsing fails
+     */
+    private Optional<Integer> parseInt(String s, int defaultValue) {
+        if (s == null) {
+            logger.error("Input is null");
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(Integer.parseInt(s.trim()));
+        } catch (NumberFormatException e) {
+            logger.error("Invalid input: {}", s);
+            return defaultValue == 0 ? Optional.empty() : Optional.of(defaultValue);
+        }
     }
 
     /**
@@ -540,20 +593,57 @@ public class Client {
      * @param ch     The {@link ManagedChannel} used for communication with the remote service.
      * @throws IOException If an I/O error occurs while reading user input.
      */
+    // Updated callSort method that handles nulls and uses Optional from parseInt
     private void callSort(BufferedReader reader, ManagedChannel ch) throws IOException {
         System.out.print("Enter numbers (comma-separated): ");
-        List<Integer> data = Arrays.stream(reader.readLine().split(","))
-                .map(str -> parseInt(str, Integer.MIN_VALUE))
-                .filter(val -> val != Integer.MIN_VALUE)
+        String numbersLine = reader.readLine();
+        if (numbersLine == null) {
+            System.out.println("No input provided for numbers.");
+            return;
+        }
+        List<Integer> data = Arrays.stream(numbersLine.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(s -> parseInt(s, 0))  // Use parseInt to handle nulls
+                .flatMap(Optional::stream)  // Java 9+: converts Optional<Integer> to Stream<Integer>
                 .collect(Collectors.toList());
+
+        printProcessedInput(data.toString(), false);
+
         System.out.print("Choose algo (0=MERGE,1=QUICK,2=INTERN): ");
-        int idx = parseInt(reader.readLine(), -1);
+        String algoLine = reader.readLine();
+        printProcessedInput(algoLine, false);
+        if (algoLine == null) {
+            System.out.println("No input provided for algorithm selection.");
+            return;
+        }
+        Optional<Integer> optionalIdx = parseInt(algoLine, 0);
+        if (optionalIdx.isEmpty()) {
+            System.out.println("Invalid algorithm selection input.");
+            return;
+        }
+        int idx = optionalIdx.get();
         Algo algo = Algo.forNumber(idx);
         if (algo == null) {
             System.out.println("Invalid algorithm selection: " + idx);
             return;
         }
+        printProcessedInput(algo.toString() + separator + data, true);
         callSortList(data, algo, ch);
+    }
+
+    private void printProcessedInput(String input, boolean isCombined) {
+        String cleanedInput = input.replaceAll(INVALID_CHAR_REGEX, "");
+        String messagePrefix = isCombined ? "Your request is: " : "Your input is: ";
+        String output = isCombined ? formatCombinedInput(cleanedInput) : cleanedInput;
+        System.out.println(messagePrefix + output);
+    }
+
+    private String formatCombinedInput(String input) {
+        return Arrays.stream(input.split(String.valueOf(separator)))
+                .map(String::trim)
+                .filter(part -> !part.isEmpty())
+                .collect(Collectors.joining(" - "));
     }
 }
 
