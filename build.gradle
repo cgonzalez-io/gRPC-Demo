@@ -57,6 +57,83 @@ protobuf {
         }
     }
 }
+// Testing workflow
+import java.net.Socket
+import java.util.concurrent.TimeUnit
+
+// a place to stash the Process so stopNode can see it
+ext.nodeProcess = null
+
+
+// Task to fork off your Node _without_ blocking
+tasks.register('startNode') {
+    doLast {
+        def javaExe = "${System.getProperty('java.home')}/bin/java"
+        // build a raw list of “things”
+        def rawArgs = [
+                javaExe,
+                '-cp', sourceSets.main.runtimeClasspath.asPath,
+                'example.grpcclient.Node',
+                'localhost', '9003',
+                'localhost', '8000',
+                'test-node', 'false'
+        ]
+        // force each element to a String
+        List<String> nodeArgs = rawArgs.collect { it.toString() }
+
+        println "▶️  Launching Node: ${nodeArgs.join(' ')}"
+        ext.nodeProcess = new ProcessBuilder(nodeArgs)
+                .inheritIO()
+                .directory(project.projectDir)
+                .start()
+
+        // wait up to 10s for port 8000
+        def up = false
+        (1..20).each { i ->
+            try {
+                new Socket('localhost', 8000).close()
+                println "✅  Node is up!"
+                up = true
+                return
+            } catch (_) {
+                sleep(500)
+            }
+        }
+        if (!up) {
+            throw new GradleException("Timed out waiting for Node on port 8000")
+        }
+    }
+}
+
+
+// Task to shut it down when we're done
+tasks.register('stopNode') {
+    doLast {
+        if (project.extensions.extraProperties.has('nodeProcess') && project.ext.nodeProcess != null) {
+            def p = project.ext.nodeProcess
+            println "⏹  Stopping Node"
+            p.destroy()
+            p.waitFor(5, TimeUnit.SECONDS)
+        } else {
+            println "⚠️  No nodeProcess found; skipping stopNode."
+        }
+    }
+}
+
+// Make tests run _after_ we’ve started the node, and ensure we shut it down
+test {
+    dependsOn startNode
+    finalizedBy stopNode
+
+    useJUnitPlatform()
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat "full"
+        showStandardStreams = true
+    }
+}
+
+
 
 sourceSets {
     main {
@@ -66,6 +143,8 @@ sourceSets {
         }
     }
 }
+
+
 // host and port of registration node
 def registryHost = "localhost" // for reaching the classes registry node use "ser321test.duckdns.org"
 def protobufPort = 9000 // port where the protobuf registry runs on -- for reaching the classes registry node use 8080
