@@ -58,11 +58,13 @@ protobuf {
     }
 }
 // Testing workflow
-import java.net.Socket
+
 import java.util.concurrent.TimeUnit
 
 // a place to stash the Process so stopNode can see it
-ext.nodeProcess = null
+ext{
+    nodeProcess = null
+}
 
 
 // Task to fork off your Node _without_ blocking
@@ -82,7 +84,7 @@ tasks.register('startNode') {
         List<String> nodeArgs = rawArgs.collect { it.toString() }
 
         println "▶️  Launching Node: ${nodeArgs.join(' ')}"
-        ext.nodeProcess = new ProcessBuilder(nodeArgs)
+        nodeProcess = new ProcessBuilder(nodeArgs)
                 .inheritIO()
                 .directory(project.projectDir)
                 .start()
@@ -109,11 +111,15 @@ tasks.register('startNode') {
 // Task to shut it down when we're done
 tasks.register('stopNode') {
     doLast {
-        if (project.extensions.extraProperties.has('nodeProcess') && project.ext.nodeProcess != null) {
+        if (project.extensions.extraProperties.get('nodeProcess') != null) {
             def p = project.ext.nodeProcess
             println "⏹  Stopping Node"
+            logger.lifecycle("⏹  Stopping Node" + p.pid())
             p.destroy()
-            p.waitFor(5, TimeUnit.SECONDS)
+            if (!p.waitFor(5, TimeUnit.SECONDS)) {
+                logger.warn("⏳ Node didn’t exit—forcing kill")
+                p.destroyForcibly()
+            }
         } else {
             println "⚠️  No nodeProcess found; skipping stopNode."
         }
@@ -132,7 +138,6 @@ test {
         showStandardStreams = true
     }
 }
-
 
 
 sourceSets {

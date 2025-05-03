@@ -81,13 +81,18 @@ public class Node {
         /* The port on which the server should run */
         // Here we are adding the different services that a client can call
         ArrayList<String> services = new ArrayList<>();
-        server = ServerBuilder.forPort(port)
-                .addService(new EchoImpl())
-                .addService(new JokeImpl())
-                .addService(new CoffeePotImpl())
-                .addService(new SortImpl())
-                .addService(new VigenereImpl())
-                .addService(new RegistryAnswerImpl(services)).build().start();
+        try {
+            server = ServerBuilder.forPort(port)
+                    .addService(new EchoImpl())
+                    .addService(new JokeImpl())
+                    .addService(new CoffeePotImpl())
+                    .addService(new SortImpl())
+                    .addService(new VigenereImpl())
+                    .addService(new RegistryAnswerImpl(services)).build().start();
+        } catch (IOException e) {
+            logger.error("Error starting server on port {}", port, e);
+            System.exit(1);
+        }
 
         for (var service : server.getServices()) {
             // returns the services that are available from this node

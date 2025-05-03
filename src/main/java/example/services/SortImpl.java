@@ -3,6 +3,8 @@ package example.services;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import service.SortGrpc;
 import service.SortRequest;
 import service.SortResponse;
@@ -15,7 +17,14 @@ import java.util.List;
  * gRPC implementation of the Sort service with robust error handling.
  */
 public class SortImpl extends SortGrpc.SortImplBase {
+    private static final Logger logger = LoggerFactory.getLogger(SortImpl.class);
 
+    /**
+     * Handles the sorting of a list of integers based on the specified algorithm.
+     *
+     * @param request          the sorting request containing the list of integers and the sorting algorithm to be applied
+     * @param responseObserver the observer used to send the response or error back to the client
+     */
     @Override
     public void sort(SortRequest request, StreamObserver<SortResponse> responseObserver) {
         if (request == null) {
@@ -89,7 +98,12 @@ public class SortImpl extends SortGrpc.SortImplBase {
     }
 
     /**
-     * Merge sort implementation.
+     * Performs the merge sort algorithm on the given list of integers.
+     * The method recursively splits the list into smaller sublists,
+     * sorts them, and merges the sorted sublists back together.
+     *
+     * @param list the list of integers to be sorted
+     * @return a new sorted list of integers in ascending order
      */
     private List<Integer> mergeSort(List<Integer> list) {
         if (list.size() <= 1) {
@@ -101,6 +115,13 @@ public class SortImpl extends SortGrpc.SortImplBase {
         return merge(left, right);
     }
 
+    /**
+     * Merges two sorted lists into a single sorted list.
+     *
+     * @param left  the first sorted list
+     * @param right the second sorted list
+     * @return a new list containing all elements from both input lists in sorted order
+     */
     private List<Integer> merge(List<Integer> left, List<Integer> right) {
         List<Integer> merged = new ArrayList<>(left.size() + right.size());
         int i = 0, j = 0;
@@ -117,7 +138,14 @@ public class SortImpl extends SortGrpc.SortImplBase {
     }
 
     /**
-     * Quick sort implementation.
+     * Sorts the given list of integers using the QuickSort algorithm.
+     * This method is a recursive implementation that partitions the list
+     * into sublists around a pivot element and sorts each sublist independently.
+     *
+     * @param list the list of integers to be sorted
+     *             The input list is not modified, and the method operates
+     *             on a copy of the list.
+     * @return a new list of integers sorted in ascending order
      */
     private List<Integer> quickSort(List<Integer> list) {
         if (list.size() <= 1) {
