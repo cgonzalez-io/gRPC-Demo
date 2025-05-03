@@ -632,6 +632,13 @@ public class Client {
         callSortList(data, algo, ch);
     }
 
+    /**
+     * Processes the input string by removing invalid characters and prints
+     * a formatted message based on the provided flag.
+     *
+     * @param input the input string to process and print
+     * @param isCombined a flag indicating if the input should be formatted as combined
+     */
     private void printProcessedInput(String input, boolean isCombined) {
         String cleanedInput = input.replaceAll(INVALID_CHAR_REGEX, "");
         String messagePrefix = isCombined ? "Your request is: " : "Your input is: ";
@@ -639,6 +646,14 @@ public class Client {
         System.out.println(messagePrefix + output);
     }
 
+    /**
+     * Formats the given input string by splitting it using a specified separator,
+     * trimming each part, filtering out empty parts, and joining the remaining parts
+     * with " - " as the delimiter.
+     *
+     * @param input the input string to be processed
+     * @return a formatted string with non-empty, trimmed parts joined by " - "
+     */
     private String formatCombinedInput(String input) {
         return Arrays.stream(input.split(String.valueOf(separator)))
                 .map(String::trim)
