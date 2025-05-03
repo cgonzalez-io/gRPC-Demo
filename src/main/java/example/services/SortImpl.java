@@ -28,6 +28,7 @@ public class SortImpl extends SortGrpc.SortImplBase {
     @Override
     public void sort(SortRequest request, StreamObserver<SortResponse> responseObserver) {
         if (request == null) {
+            logger.error("Received null request");
             responseObserver.onError(
                     new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Request cannot be null"))
             );
@@ -36,6 +37,7 @@ public class SortImpl extends SortGrpc.SortImplBase {
 
         List<Integer> input = request.getDataList();
         if (input == null) {
+            logger.error("Received null data list");
             responseObserver.onError(
                     new StatusRuntimeException(Status.INVALID_ARGUMENT.withDescription("Data list cannot be null"))
             );
@@ -44,6 +46,7 @@ public class SortImpl extends SortGrpc.SortImplBase {
 
         // Empty list is valid: return success with empty data
         if (input.isEmpty()) {
+            logger.info("Sorting empty list with algorithm {}", request.getAlgo());
             responseObserver.onNext(
                     SortResponse.newBuilder()
                             .setIsSuccess(true)
@@ -53,9 +56,23 @@ public class SortImpl extends SortGrpc.SortImplBase {
             responseObserver.onCompleted();
             return;
         }
+        String algo = request.getAlgo().toString();
+
+        if (algo == null || algo.isEmpty()) {
+            logger.error("No algorithm provided for sorting");
+            SortResponse resp = SortResponse.newBuilder()
+                    .setIsSuccess(false)
+                    .setError("No algorithm provided")
+                    .build();
+            responseObserver.onNext(resp);
+            responseObserver.onCompleted();
+            return;
+        }
+
 
         try {
             List<Integer> output;
+            logger.info("Sorting {} integers with algorithm {}", input.size(), request.getAlgo());
             switch (request.getAlgo()) {
                 case MERGE:
                     output = mergeSort(input);
@@ -69,6 +86,7 @@ public class SortImpl extends SortGrpc.SortImplBase {
                     break;
                 default:
                     // Unknown enum value: invalid argument
+                    logger.error("Unknown sorting algorithm: {}", request.getAlgo());
                     responseObserver.onError(
                             new StatusRuntimeException(
                                     Status.INVALID_ARGUMENT
@@ -88,6 +106,7 @@ public class SortImpl extends SortGrpc.SortImplBase {
             responseObserver.onCompleted();
         } catch (RuntimeException e) {
             // Unexpected server error
+            logger.error("Sorting failed: {}", e.getMessage(), e);
             responseObserver.onError(
                     new StatusRuntimeException(
                             Status.INTERNAL

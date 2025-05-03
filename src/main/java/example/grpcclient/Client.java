@@ -92,23 +92,30 @@ public class Client {
         try {
             Client client = new Client(svcCh, regCh);
             BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
-            String autoProp = System.getProperty("auto");
+            String autoProp = System.getProperty("auto", "0");
+            logger.info("auto property: {}", autoProp);
+            if (autoProp == null) {
+                autoProp = "0"; // Default to manual mode if not set
+            }
             // Wrap all flows in top-level try to catch unexpected exceptions
             try {
                 if ("1".equals(autoProp)) {
                     try {
+                        logger.info("Starting client in auto-run mode with args: {} and property auto set to : {}", Arrays.toString(args), autoProp);
                         new AutoTestRunner(client).runAll();
                     } catch (Exception ae) {
                         System.err.println("Auto-run failed: " + ae.getMessage());
                     }
                 } else if (regOn) {
                     try {
+                        logger.info("Starting client in dynamic mode with args: {}", Arrays.toString(args));
                         client.dynamicFlow(reader, message);
                     } catch (IOException | StatusRuntimeException e) {
                         System.err.println("Interactive (registry) flow error: " + e.getMessage());
                     }
                 } else {
                     try {
+                        logger.info("Starting client in static mode with args: {}", Arrays.toString(args));
                         client.staticMenu(reader, message);
                     } catch (IOException | StatusRuntimeException e) {
                         System.err.println("Interactive (local) menu error: " + e.getMessage());
@@ -253,6 +260,10 @@ public class Client {
      *             if null, a default stub will be used
      */
     public void callSortList(List<Integer> data, Algo algo, ManagedChannel ch) {
+        if (algo == null) {
+            System.out.println("Invalid algorithm: " + "null or empty");
+            return;
+        }
         try {
             SortResponse resp = (ch != null ? SortGrpc.newBlockingStub(ch) : sortStub)
                     .sort(SortRequest.newBuilder().addAllData(data).setAlgo(algo).build());
@@ -612,14 +623,18 @@ public class Client {
 
         System.out.print("Choose algo (0=MERGE,1=QUICK,2=INTERN): ");
         String algoLine = reader.readLine();
-        printProcessedInput(algoLine, false);
         if (algoLine == null) {
             System.out.println("No input provided for algorithm selection.");
             return;
         }
+        printProcessedInput(algoLine, false);
+        if (algoLine.isEmpty()) {
+            System.out.println("Invalid algorithm selection input.");
+            return;
+        }
         Optional<Integer> optionalIdx = parseInt(algoLine, 0);
         if (optionalIdx.isEmpty()) {
-            System.out.println("Invalid algorithm selection input.");
+            System.out.println("Invalid algorithm selection: " + algoLine);
             return;
         }
         int idx = optionalIdx.get();
@@ -636,7 +651,7 @@ public class Client {
      * Processes the input string by removing invalid characters and prints
      * a formatted message based on the provided flag.
      *
-     * @param input the input string to process and print
+     * @param input      the input string to process and print
      * @param isCombined a flag indicating if the input should be formatted as combined
      */
     private void printProcessedInput(String input, boolean isCombined) {

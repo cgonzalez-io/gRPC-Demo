@@ -168,8 +168,6 @@ def discoveryPort = 10000 // port where the node runs a registry thread for the 
 def message = "Hello you" // for the echo service in the node
 
 def regOn = false
-// if auto is true it will run the hardcoded example
-def auto = false
 
 // task reading in the arguments if any given, if not the default from above will be used
 tasks.register('arguments') {
@@ -202,9 +200,6 @@ tasks.register('arguments') {
     }
     if (project.hasProperty("regOn")) {
         regOn = project.getProperty("regOn")
-    }
-    if (project.hasProperty("auto")) {
-        auto = project.getProperty("auto")
     }
 }
 
@@ -260,6 +255,10 @@ tasks.register('runClient', JavaExec) {
     args grpcPort
     args message
     args regOn
+    //setting the system properties default for auto
+    if (project.hasProperty("auto")) {
+        systemProperties['auto'] = project.getProperty("auto")
+    }
 }
 
 // runs a service node which already has the echo and joke service included
