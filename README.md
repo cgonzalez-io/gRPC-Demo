@@ -1,22 +1,99 @@
 # Distributed gRPC Microservices Project
 
 This repository implements a modular, discoverable gRPC system in Java, featuring multiple services and a registry for
-discovery. It fulfills both Task 1 (extending provided services) and Task 2 (inventing a new service) of the Distributed
-Systems assignment.
+dynamic discovery. It extends the provided starter code with two built‑in services (CoffeePot & Sort) and an invented
+Vigenère cipher service, fulfilling all assignment requirements.
+
+## Features & Requirements
+
+1. **Echo**: simple request/response (`parrot` RPC)
+2. **Joke**: fetch a number of jokes and add new ones (`getJoke`, `setJoke` RPCs)
+3. **CoffeePot**: manage brewing lifecycle (`brew`, `getCup`, `brewStatus` RPCs)
+4. **Sort**: sort integer lists with three algorithms (MERGE, QUICK, INTERN) (`sort` RPC)
+5. **Vigenère Cipher**: encode/decode text and view history (`encode`, `decode`, `history` RPCs)
+
+All RPCs handle both valid and invalid inputs without crashing.
+
+## Getting Started
+
+### Prerequisites
+
+* Java JDK 22
+* Gradle 8.12 (via `./gradlew`)
+* OS with network loopback support
+
+### Build & Test
+
+```bash
+./gradlew clean build
+# Compiles code, generates proto stubs, runs unit tests
+```
+
+### Running Services
+
+#### 1. Start Registry (optional)
+
+```bash
+./gradlew runRegistryServer
+# Defaults to localhost:9003
+```
+
+#### 2. Start Node (server)
+
+```bash
+./gradlew runNode
+# Defaults to localhost:9099, no registry
+# To register with registry:
+./gradlew runNode -PregOn=true -PregHost=localhost -PregPort=9003
+```
+
+#### 3. Start Client (interactive)
+
+```bash
+# Static mode (direct to node):
+./gradlew runClient -Phost=localhost -Pport=9099
+
+# Dynamic (registry‑driven):
+./gradlew runClient -Phost=localhost -Pport=9099 -PregOn=true -PregHost=localhost -PregPort=9003
+```
+
+#### 4. Auto‑Demo Mode
+
+```bash
+./gradlew runClient -Phost=localhost -Pport=9099 -Pauto=1
+# Runs a full sequence of valid/invalid scenarios with formatted report
+```
+
+## How to Use
+
+1. **Menu-driven client**:
+
+    * On launch, choose from: Echo, Joke, Brew Coffee, Get Cup, Brew Status, Sort, Vigenère Encode, Vigenère Decode,
+      Vigenère History.
+    * Follow prompts for input values (e.g. message text, number of jokes, list to sort, plaintext/key).
+2. **Auto‑Demo**:
+
+    * No interactive input; scenarios run automatically and print a table of test results.
+
+## Requirements Checklist
+
+| Req | Description                                                           | Status |
+|-----|-----------------------------------------------------------------------|:------:|
+| 1   | `build.gradle`, `README.md`, project compiles & tests                 |   ✓    |
+| 2a  | Project & feature description                                         |   ✓    |
+| 2b  | Run commands copy‑pasteable                                           |   ✓    |
+| 2c  | Usage instructions & prompt details                                   |   ✓    |
+| 2d  | Requirements list with fulfillment status                             |   ✓    |
+| 3   | `gradle runNode` & `gradle runClient` work by default                 |   ✓    |
+| 4   | Two provided services (CoffeePot, Sort) implemented                   |   ✓    |
+| 5   | Clear, robust menu‑based client interaction                           |   ✓    |
+| 6   | Auto‑demo mode (`-Pauto=1`)                                           |   ✓    |
+| 7   | Invented service (Vigenère) with persistent history and multiple RPCs |   ✓    |
 
 ---
 
-## Prerequisites
+Feel free to open issues or reach out with questions! Happy gRPC-ing.
 
-- **Java**: Oracle JDK 22
-- **Build**: Gradle 8.12 (via provided `gradlew` wrapper)
-- **OS**: any with network loopback support
-
-Clone, then run:
-
-```bash
-./gradlew clean build    # compiles, runs proto generation, and tests
-```
 
 ---
 
@@ -130,7 +207,7 @@ Runs all RPCs in sequence, including:
 
 ## 4. Screencast
 
-▶️ [See Demo Video](docs/screencast.mp4)
+▶️ Video Link: [YouTube](https://www.youtube.com/playlist?list=PLNJf3PhE4U6D9uje1Qz3t28TqqqIoDkZQ)
 
 ---
 
